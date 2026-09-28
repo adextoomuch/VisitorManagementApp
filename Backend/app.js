@@ -12,14 +12,16 @@ const startAutoCheckoutJob = require("./cjobs/cronJobs.js");
 const express = require("express");
 const cors = require("cors");
 const connectDB = require("./settings/db.js");
-const mongoose = require("mongoose");
+const { sendError } = require("./utils/response.js");
 const PORT = process.env.PORT || 3000;
 const visitors = require("./routes/visitors.js");
 const app = express();
 
-app.use(cors({
-    origin: process.env.FRONTEND_URL || "http://127.0.0.1:3001/", // Replace with your frontend URL
-}));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://127.0.0.1:3001",
+  }),
+);
 app.use(express.json());
 // Fire up the background task manager loop
 startAutoCheckoutJob();
@@ -27,7 +29,21 @@ console.log(
   "⚡ Background task manager initialized (Midnight Auto-Checkout Active).",
 );
 
-app.use("/VMS/version1/visitors", visitors);
+// Always use api/v1/feature-name for all routes in this file
+app.use("/api/v1/visitors", visitors);
+
+app.use((req, res) => {
+  return sendError(res, 404, "Endpoint not found.");
+});
+
+app.use((error, req, res, next) => {
+  if (error instanceof SyntaxError && error.status === 400 && "body" in error) {
+    return sendError(res, 400, "Request body contains invalid JSON.");
+  }
+
+  console.error("Unhandled server error:", error);
+  return sendError(res, 500, "Internal server error.");
+});
 
 const startserver = async () => {
   await connectDB();
