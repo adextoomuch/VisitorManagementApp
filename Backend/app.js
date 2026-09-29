@@ -16,6 +16,11 @@ const { sendError } = require("./utils/response.js");
 const PORT = process.env.PORT || 3000;
 const visitors = require("./routes/visitors.js");
 const app = express();
+const auth = require("./routes/auth.js");
+const users = require("./routes/user.js");
+const hosts = require("./routes/host.js");
+const admin = require("./routes/admin.js");
+
 
 app.use(
   cors({
@@ -45,6 +50,13 @@ app.use((error, req, res, next) => {
   return sendError(res, 500, "Internal server error.");
 });
 
+app.use("/VMS/version1/auth", auth);
+app.use("/VMS/version1/users", users);
+app.use("/VMS/version1/hosts", hosts);
+app.use("/VMS/version1/admin", admin);
+
+
+
 const startserver = async () => {
   await connectDB();
   app.listen(PORT, () => {
@@ -53,3 +65,5 @@ const startserver = async () => {
 };
 
 startserver();
+
+
