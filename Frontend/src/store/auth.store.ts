@@ -4,17 +4,15 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 interface User {
-  user_id: string;
+  id: string;
+  name: string;
   email: string;
   role: string;
-  permissions: string[];
-  full_name: string;
-  employee_id: string | null;
 }
 
 interface LastUser {
   email: string;
-  full_name: string;
+  name: string;
   // profile image when you add it later
 }
 
@@ -27,6 +25,7 @@ interface AuthState {
   clearAuth: () => void;
   clearLastUser: () => void;
   isAuthenticated: () => boolean;
+  hydrateAuth: () => Promise<void>;
 }
 
 // Split into two stores:
@@ -52,15 +51,15 @@ export const useAuthStore = create<AuthState>()(
           user,
           lastUser: {
             email: user.email,
-            full_name: user.full_name,
+            name: user.name,
           },
         }),
 
       hydrateAuth: async () => {
         try {
-          const user = await api.get(endpoints.auth.me);
+          const response = await api.get<{ data: User }>(endpoints.auth.me);
           set({
-            user: user.data,
+            user: response.data.data,
           });
         } catch {
           // console.error("Failed to hydrate auth state:", error)
@@ -105,7 +104,7 @@ export const useLastUserStore = create<LastUserState>()(
       clearLastUser: () => set({ lastUser: null }),
     }),
     {
-      name: "shop-admin-last-user", // localStorage key
+      name: "VM-app-last-user",
     },
   ),
 );

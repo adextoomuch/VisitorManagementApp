@@ -1,7 +1,8 @@
-import { createElement, lazy, Suspense, type ReactNode } from "react";
-import { Routes, Route } from "react-router-dom";
+import { createElement, Fragment, lazy, Suspense, type ReactNode } from "react";
+import { Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { PageLoader } from "@/components/feedback/PageLoader";
 import { ErrorBoundary } from "@/components/feedback/ErrorBoundary";
+import { useAuthStore } from "@/store/auth.store";
 
 /**
  * Lazy-loaded pages — each chunk is only fetched when the user
@@ -9,6 +10,9 @@ import { ErrorBoundary } from "@/components/feedback/ErrorBoundary";
  */
 
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
+const LoginPage = lazy(() => import("@/pages/LoginPage"));
+// const RegisterPage = lazy(() => import("@/pages/RegisterPage"));
+const RoleHomePage = lazy(() => import("@/pages/RoleHomePage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
 // ─────────────────────────────────────────────────────────────
@@ -19,21 +23,30 @@ const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
  * Redirects unauthenticated users to /login.
  * Wraps all protected dashboard routes.
  */
-// function ProtectedRoute({ children }: { children: React.ReactNode }) {
-//   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)()
-//   if (!isAuthenticated) return <Navigate to="/login" replace />
-//   return <>{children}</>
-// }
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
+  if (!isAuthenticated) {
+    return createElement(Navigate, {
+      to: "/login",
+      replace: true,
+      state: { from: location.pathname },
+    });
+  }
+  return createElement(Fragment, null, children);
+}
 
 /**
  * Redirects authenticated users away from auth pages.
  * Wraps login, forgot password, reset password.
  */
-// function GuestRoute({ children }: { children: React.ReactNode }) {
-//   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)()
-//   if (isAuthenticated) return <Navigate to="/" replace />
-//   return <>{children}</>
-// }
+function GuestRoute({ children }: { children: ReactNode }) {
+  const user = useAuthStore((state) => state.user);
+  if (user) {
+    return createElement(Navigate, { to: `/${user.role}`, replace: true });
+  }
+  return createElement(Fragment, null, children);
+}
 
 /**
  * Wraps each lazy route in Suspense + ErrorBoundary.
@@ -60,6 +73,51 @@ export default function AppRouter() {
     createElement(Route, {
       path: "/",
       element: createElement(RouteWrapper, null, createElement(LandingPage)),
+    }),
+    createElement(Route, {
+      path: "/login",
+      element: createElement(
+        RouteWrapper,
+        null,
+        createElement(GuestRoute, null, createElement(LoginPage)),
+      ),
+    }),
+    // Public registration is disabled; admins create internal accounts.
+    createElement(Route, {
+      path: "/admin",
+      element: createElement(
+        RouteWrapper,
+        null,
+        createElement(
+          ProtectedRoute,
+          null,
+          createElement(RoleHomePage, { role: "admin" }),
+        ),
+      ),
+    }),
+    createElement(Route, {
+      path: "/host",
+      element: createElement(
+        RouteWrapper,
+        null,
+        createElement(
+          ProtectedRoute,
+          null,
+          createElement(RoleHomePage, { role: "host" }),
+        ),
+      ),
+    }),
+    createElement(Route, {
+      path: "/receptionist",
+      element: createElement(
+        RouteWrapper,
+        null,
+        createElement(
+          ProtectedRoute,
+          null,
+          createElement(RoleHomePage, { role: "receptionist" }),
+        ),
+      ),
     }),
     createElement(Route, {
       path: "*",

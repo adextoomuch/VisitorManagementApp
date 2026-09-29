@@ -5,6 +5,12 @@ dns.setServers(["8.8.8.8", "1.1.1.1"]);
 // 2. Load your environment variables BEFORE anything else
 require("dotenv").config();
 
+if (!process.env.JWT_SECRET) {
+  throw new Error(
+    "JWT_SECRET must be configured in Backend/.env before startup.",
+  );
+}
+
 // 1. Import  cron job configuration
 const startAutoCheckoutJob = require("./cjobs/cronJobs.js");
 
@@ -21,7 +27,6 @@ const users = require("./routes/user.js");
 const hosts = require("./routes/host.js");
 const admin = require("./routes/admin.js");
 
-
 app.use(
   cors({
     origin: process.env.FRONTEND_URL || "http://127.0.0.1:3001",
@@ -36,6 +41,10 @@ console.log(
 
 // Always use api/v1/feature-name for all routes in this file
 app.use("/api/v1/visitors", visitors);
+app.use("/api/v1/auth", auth);
+app.use("/api/v1/users", users);
+app.use("/api/v1/hosts", hosts);
+app.use("/api/v1/admin", admin);
 
 app.use((req, res) => {
   return sendError(res, 404, "Endpoint not found.");
@@ -50,13 +59,6 @@ app.use((error, req, res, next) => {
   return sendError(res, 500, "Internal server error.");
 });
 
-app.use("/VMS/version1/auth", auth);
-app.use("/VMS/version1/users", users);
-app.use("/VMS/version1/hosts", hosts);
-app.use("/VMS/version1/admin", admin);
-
-
-
 const startserver = async () => {
   await connectDB();
   app.listen(PORT, () => {
@@ -65,5 +67,3 @@ const startserver = async () => {
 };
 
 startserver();
-
-
