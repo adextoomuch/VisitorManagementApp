@@ -42,6 +42,7 @@ const createHost = async (req, res) => {
     }
 
     const temporaryPassword = generateTemporaryPassword();
+    console.log(`Generated temporary password for host ${normalizedEmail}: ${temporaryPassword}`);
     const host = await User.create({
       name: name.trim(),
       email: normalizedEmail,
