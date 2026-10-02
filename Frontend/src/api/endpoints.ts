@@ -6,6 +6,12 @@ export const endpoints = {
   },
   admin: {
     createHost: "/admin/hosts",
+    createReceptionist: "/admin/receptionists",
+  },
+  host: {
+    appointments: "/hosts/me/appointments",
+    notifications: "/hosts/me/notifications",
+    decideAppointment: (id: string) => `/hosts/me/appointments/${id}/decision`,
   },
   visitor: {
     getVisitors: "/visitors",
@@ -16,5 +22,11 @@ export const endpoints = {
     visitorReport: "/visitors/report",
     scanCheckIn: "/visitors/scan-checkin",
     scanCheckOut: "/visitors/scan-checkout",
+    receptionistVisitors: "/visitors/reception/visitors",
+    receptionistBookings: "/visitors/reception/bookings",
+    manualCheckIn: (id: string) =>
+      `/visitors/reception/visitors/${id}/check-in`,
+    manualCheckOut: (id: string) =>
+      `/visitors/reception/visitors/${id}/check-out`,
   },
 } as const;

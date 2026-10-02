@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, LoaderCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { z } from "zod";
@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { getApiErrorMessage } from "@/api/axios";
-import { createVisitor } from "./visitor.api";
+import { createVisitor, getBookingHosts } from "./visitor.api";
 import { visitorBookingDraftKey } from "./visitors.constants";
 import type { CreateVisitorPayload, Visitor } from "./visitors.types";
 
@@ -17,9 +17,11 @@ const bookingSchema = z.object({
     mobileNo: z.string().regex(/^\d{7,15}$/, "Enter a valid mobile number."),
     email: z.string().trim().email("Enter a valid email address."),
     address: z.string().trim().min(5, "Enter your address.").optional().or(z.literal("")),
-    whomToMeet: z.string().trim().min(2, "Enter the person you are visiting."),
     purpose: z.string().trim().min(3, "Tell us the purpose of your visit."),
     dateOfVisit: z.string().min(1, "Choose a visit date."),
+    visitStartTime: z.string().min(1, "Choose a start time."),
+    visitEndTime: z.string().min(1, "Choose an end time."),
+    hostId: z.string().min(1, "Choose a host."),
 });
 
 type BookingFormValues = z.infer<typeof bookingSchema>;
@@ -32,6 +34,9 @@ const initialValues: BookingFormValues = {
     whomToMeet: "",
     purpose: "",
     dateOfVisit: "",
+    visitStartTime: "",
+    visitEndTime: "",
+    hostId: "",
 };
 
 function Field({
@@ -62,6 +67,7 @@ export default function VisitorsPage() {
     const [submittedVisitor, setSubmittedVisitor] = useState<Visitor | null>(null);
     const [requestError, setRequestError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [hosts, setHosts] = useState<Array<{ id: string; name: string; email: string }>>([]);
     const form = useForm<BookingFormValues>({
         resolver: zodResolver(bookingSchema),
         defaultValues: initialValues,
@@ -71,14 +77,20 @@ export default function VisitorsPage() {
         form,
     });
 
+    useEffect(() => {
+        void getBookingHosts().then((response) => setHosts(response.data ?? []));
+    }, []);
+
     const submitBooking = async (values: BookingFormValues) => {
         setIsSubmitting(true);
         setRequestError(null);
 
         const payload: CreateVisitorPayload = {
             ...values,
+            dateOfVisit: `${values.dateOfVisit}T${values.visitStartTime}:00`,
+            visitEndTime: `${values.dateOfVisit}T${values.visitEndTime}:00`,
             mobileNo: Number(values.mobileNo),
-            whomToMeet: [values.whomToMeet],
+            hostId: values.hostId,
         };
 
         try {
@@ -154,8 +166,10 @@ export default function VisitorsPage() {
                             <Field label="Full name" placeholder="e.g. Alex Morgan" {...form.register("visitorName")} error={errors.visitorName?.message} />
                             <Field label="Mobile number" type="tel" inputMode="numeric" placeholder="e.g. 9876543210" {...form.register("mobileNo")} error={errors.mobileNo?.message} />
                             <Field label="Email address" type="email" placeholder="you@example.com" {...form.register("email")} error={errors.email?.message} />
-                            <Field label="Person to meet" placeholder="e.g. Jordan Cole" {...form.register("whomToMeet")} error={errors.whomToMeet?.message} />
+                            <label className="grid gap-2 text-sm font-medium text-foreground" htmlFor="hostId">Host<select id="hostId" className="h-11 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/20" {...form.register("hostId")}><option value="">Choose a host</option>{hosts.map((host) => <option key={host.id} value={host.id}>{host.name}</option>)}</select>{errors.hostId?.message && <span className="text-xs font-normal text-destructive">{errors.hostId.message}</span>}</label>
                             <Field label="Visit date" type="date" {...form.register("dateOfVisit")} error={errors.dateOfVisit?.message} />
+                            <Field label="From" type="time" {...form.register("visitStartTime")} error={errors.visitStartTime?.message} />
+                            <Field label="To" type="time" {...form.register("visitEndTime")} error={errors.visitEndTime?.message} />
                             <Field label="Purpose of visit" placeholder="e.g. Product review" {...form.register("purpose")} error={errors.purpose?.message} />
                             <label className="grid gap-2 text-sm font-medium text-foreground sm:col-span-2" htmlFor="address">
                                 Address

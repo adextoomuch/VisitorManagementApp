@@ -42,7 +42,9 @@ const createHost = async (req, res) => {
     }
 
     const temporaryPassword = generateTemporaryPassword();
-    console.log(`Generated temporary password for host ${normalizedEmail}: ${temporaryPassword}`);
+    console.log(
+      `Generated temporary password for host ${normalizedEmail}: ${temporaryPassword}`,
+    );
     const host = await User.create({
       name: name.trim(),
       email: normalizedEmail,
@@ -90,6 +92,74 @@ const createHost = async (req, res) => {
     );
   } catch (error) {
     return sendError(res, 500, "Unable to create host.", error.message);
+  }
+};
+
+const createReceptionist = async (req, res) => {
+  try {
+    const { name, email } = req.body;
+
+    if (!name?.trim() || !email?.trim()) {
+      return sendError(res, 400, "Receptionist name and email are required.");
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const existingUser = await User.findOne({ email: normalizedEmail });
+
+    if (existingUser) {
+      return sendError(res, 409, "A user with this email already exists.");
+    }
+
+    const temporaryPassword = generateTemporaryPassword();
+    const receptionist = await User.create({
+      name: name.trim(),
+      email: normalizedEmail,
+      password: await bcrypt.hash(temporaryPassword, 12),
+      role: "receptionist",
+    });
+
+    let emailSent = false;
+
+    try {
+      await resend.emails.send({
+        from: process.env.EMAIL_FROM || "onboarding@resend.dev",
+        to: receptionist.email,
+        subject: "Your VisitorFlow receptionist account",
+        html: `
+          <h2>Welcome to VisitorFlow, ${escapeHtml(receptionist.name)}</h2>
+          <p>An administrator created a receptionist account for you.</p>
+          <p><strong>Email:</strong> ${escapeHtml(receptionist.email)}</p>
+          <p><strong>Temporary password:</strong> ${escapeHtml(temporaryPassword)}</p>
+          <p>Please sign in and change this password as soon as possible.</p>
+        `,
+      });
+      emailSent = true;
+    } catch (emailError) {
+      console.error(
+        "Failed to send receptionist credentials email:",
+        emailError.message,
+      );
+    }
+
+    return sendSuccess(
+      res,
+      emailSent
+        ? "Receptionist created and credentials emailed successfully."
+        : "Receptionist created, but the credentials email could not be sent.",
+      {
+        receptionist: publicUser(receptionist),
+        credentials: { email: receptionist.email, temporaryPassword },
+        emailSent,
+      },
+      201,
+    );
+  } catch (error) {
+    return sendError(
+      res,
+      500,
+      "Unable to create receptionist.",
+      error instanceof Error ? error.message : "Unexpected server error.",
+    );
   }
 };
 
@@ -159,4 +229,4 @@ const createUser = async (req, res) => {
   }
 };
 
-module.exports = { createUser, createHost };
+module.exports = { createUser, createHost, createReceptionist };

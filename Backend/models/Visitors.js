@@ -8,6 +8,12 @@ const visitorSchema = new mongoose.Schema(
       unique: true,
     },
 
+    hostId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+    },
+
     visitorName: {
       type: String,
       required: [true, "Visitor name is required"],
@@ -32,6 +38,10 @@ const visitorSchema = new mongoose.Schema(
     },
 
     dateOfVisit: {
+      type: Date,
+    },
+
+    visitEndTime: {
       type: Date,
     },
 

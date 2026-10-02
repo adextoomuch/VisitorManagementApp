@@ -10,7 +10,10 @@ import { useAuthStore } from "@/store/auth.store";
  */
 
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
+const VisitorsPage = lazy(() => import("@/features/visitors/VisitorsPage"));
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const AdminPage = lazy(() => import("@/pages/AdminPage"));
+const ReceptionistPage = lazy(() => import("@/pages/ReceptionistPage"));
 // const RegisterPage = lazy(() => import("@/pages/RegisterPage"));
 const RoleHomePage = lazy(() => import("@/pages/RoleHomePage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
@@ -82,17 +85,17 @@ export default function AppRouter() {
         createElement(GuestRoute, null, createElement(LoginPage)),
       ),
     }),
+    createElement(Route, {
+      path: "/book-appointment",
+      element: createElement(RouteWrapper, null, createElement(VisitorsPage)),
+    }),
     // Public registration is disabled; admins create internal accounts.
     createElement(Route, {
       path: "/admin",
       element: createElement(
         RouteWrapper,
         null,
-        createElement(
-          ProtectedRoute,
-          null,
-          createElement(RoleHomePage, { role: "admin" }),
-        ),
+        createElement(ProtectedRoute, null, createElement(AdminPage)),
       ),
     }),
     createElement(Route, {
@@ -112,11 +115,7 @@ export default function AppRouter() {
       element: createElement(
         RouteWrapper,
         null,
-        createElement(
-          ProtectedRoute,
-          null,
-          createElement(RoleHomePage, { role: "receptionist" }),
-        ),
+        createElement(ProtectedRoute, null, createElement(ReceptionistPage)),
       ),
     }),
     createElement(Route, {

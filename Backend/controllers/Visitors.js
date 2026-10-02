@@ -1,4 +1,5 @@
 const Visitors = require("../models/Visitors");
+const User = require("../models/User");
 const { Resend } = require("resend");
 const QRCode = require("qrcode");
 const { sendSuccess, sendError } = require("../utils/response");
@@ -7,6 +8,47 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const errorMessage = (error) =>
   error instanceof Error ? error.message : "Unexpected server error.";
+
+const validateVisitRange = (dateOfVisit, visitEndTime) => {
+  const start = new Date(dateOfVisit);
+  const end = new Date(visitEndTime);
+
+  if (
+    !dateOfVisit ||
+    !visitEndTime ||
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime()) ||
+    start >= end
+  ) {
+    return null;
+  }
+
+  return { start, end };
+};
+
+const hasHostConflict = async (hostId, dateOfVisit, visitEndTime) => {
+  if (!hostId) return false;
+
+  const range = validateVisitRange(dateOfVisit, visitEndTime);
+  if (!range) return false;
+
+  return Boolean(
+    await Visitors.exists({
+      hostId,
+      status: { $ne: "Rejected" },
+      $or: [
+        {
+          dateOfVisit: { $lt: range.end },
+          visitEndTime: { $gt: range.start },
+        },
+        {
+          dateOfVisit: { $gte: range.start, $lt: range.end },
+          $or: [{ visitEndTime: { $exists: false } }, { visitEndTime: null }],
+        },
+      ],
+    }),
+  );
+};
 
 const parseQrData = (qrDataString) => {
   if (!qrDataString) {
@@ -100,9 +142,347 @@ exports.getVisitorsByDate = async (req, res) => {
   }
 };
 
+exports.getReceptionistVisitors = async (req, res) => {
+  try {
+    const visitors = await Visitors.find().sort({
+      dateOfVisit: 1,
+      createdAt: -1,
+    });
+    return sendSuccess(
+      res,
+      "Reception visitor queue retrieved successfully.",
+      visitors,
+    );
+  } catch (error) {
+    return sendError(
+      res,
+      500,
+      "Unable to retrieve the reception visitor queue.",
+      errorMessage(error),
+    );
+  }
+};
+
+const findVisitorForReception = async (id) => Visitors.findById(id);
+
+exports.manualCheckIn = async (req, res) => {
+  try {
+    const visitor = await findVisitorForReception(req.params.id);
+
+    if (!visitor) return sendError(res, 404, "Visitor profile not found.");
+    if (visitor.status === "Checked In")
+      return sendError(res, 409, "Visitor is already checked in.");
+    if (visitor.status === "Checked Out")
+      return sendError(res, 409, "Visitor has already checked out.");
+    if (visitor.status !== "Approved")
+      return sendError(res, 403, "Only an approved visitor can check in.");
+
+    const today = new Date();
+    const scheduledDate = new Date(visitor.dateOfVisit);
+    if (
+      Number.isNaN(scheduledDate.getTime()) ||
+      today.toDateString() !== scheduledDate.toDateString()
+    ) {
+      return sendError(
+        res,
+        400,
+        "This appointment is not scheduled for today.",
+      );
+    }
+
+    visitor.status = "Checked In";
+    visitor.checkInTime = new Date();
+    await visitor.save();
+    return sendSuccess(
+      res,
+      `Check-in recorded for ${visitor.visitorName}.`,
+      visitor,
+    );
+  } catch (error) {
+    return sendError(res, 500, "Manual check-in failed.", errorMessage(error));
+  }
+};
+
+exports.manualCheckOut = async (req, res) => {
+  try {
+    const visitor = await findVisitorForReception(req.params.id);
+
+    if (!visitor) return sendError(res, 404, "Visitor profile not found.");
+    if (visitor.status === "Checked Out")
+      return sendError(res, 409, "Visitor has already checked out.");
+    if (visitor.status !== "Checked In")
+      return sendError(
+        res,
+        409,
+        "Visitor must be checked in before checking out.",
+      );
+
+    visitor.status = "Checked Out";
+    visitor.checkOutTime = new Date();
+    await visitor.save();
+    return sendSuccess(
+      res,
+      `Check-out recorded for ${visitor.visitorName}.`,
+      visitor,
+    );
+  } catch (error) {
+    return sendError(res, 500, "Manual check-out failed.", errorMessage(error));
+  }
+};
+
+exports.createReceptionistBooking = async (req, res) => {
+  try {
+    const {
+      visitorName,
+      mobileNo,
+      address,
+      purpose,
+      dateOfVisit,
+      email,
+      hostId,
+    } = req.body;
+    const { visitEndTime } = req.body;
+    const host = await User.findOne({ _id: hostId, role: "host" });
+
+    if (!host) return sendError(res, 400, "A valid host must be selected.");
+    if (!visitorName || !mobileNo || !dateOfVisit || !email) {
+      return sendError(
+        res,
+        400,
+        "Visitor name, mobile number, date, and email are required.",
+      );
+    }
+
+    if (!validateVisitRange(dateOfVisit, visitEndTime)) {
+      return sendError(
+        res,
+        400,
+        "A valid appointment start and end time are required.",
+      );
+    }
+
+    if (await hasHostConflict(host._id, dateOfVisit, visitEndTime)) {
+      return sendError(
+        res,
+        409,
+        "That time is already booked for the selected host.",
+      );
+    }
+
+    const visitor = await Visitors.create({
+      visitorName,
+      mobileNo,
+      address,
+      purpose,
+      dateOfVisit,
+      visitEndTime,
+      email,
+      hostId: host._id,
+      whomToMeet: [host.name],
+    });
+
+    return sendSuccess(
+      res,
+      "Booking created and sent to the host for approval.",
+      visitor,
+      201,
+    );
+  } catch (error) {
+    return sendError(
+      res,
+      400,
+      "Unable to create receptionist booking.",
+      errorMessage(error),
+    );
+  }
+};
+
+exports.getHostAppointments = async (req, res) => {
+  try {
+    const visitors = await Visitors.find({ hostId: req.user.id }).sort({
+      dateOfVisit: 1,
+    });
+    return sendSuccess(
+      res,
+      "Host appointments retrieved successfully.",
+      visitors,
+    );
+  } catch (error) {
+    return sendError(
+      res,
+      500,
+      "Unable to retrieve host appointments.",
+      errorMessage(error),
+    );
+  }
+};
+
+exports.getHostNotifications = async (req, res) => {
+  try {
+    const notifications = await Visitors.find({
+      hostId: req.user.id,
+      status: "Pending Approval",
+    }).sort({ createdAt: -1 });
+    return sendSuccess(
+      res,
+      "Host notifications retrieved successfully.",
+      notifications,
+    );
+  } catch (error) {
+    return sendError(
+      res,
+      500,
+      "Unable to retrieve host notifications.",
+      errorMessage(error),
+    );
+  }
+};
+
+exports.createHostAppointment = async (req, res) => {
+  try {
+    const {
+      visitorName,
+      mobileNo,
+      address,
+      purpose,
+      dateOfVisit,
+      visitEndTime,
+      email,
+    } = req.body;
+    const host = await User.findOne({ _id: req.user.id, role: "host" });
+
+    if (!host) {
+      return sendError(
+        res,
+        403,
+        "Only host accounts can create host appointments.",
+      );
+    }
+
+    if (!visitorName || !mobileNo || !dateOfVisit || !email) {
+      return sendError(
+        res,
+        400,
+        "Visitor name, mobile number, date, and email are required.",
+      );
+    }
+
+    if (!validateVisitRange(dateOfVisit, visitEndTime)) {
+      return sendError(
+        res,
+        400,
+        "A valid appointment start and end time are required.",
+      );
+    }
+
+    if (await hasHostConflict(host._id, dateOfVisit, visitEndTime)) {
+      return sendError(
+        res,
+        409,
+        "That time is already booked for your host account.",
+      );
+    }
+
+    const visitor = await Visitors.create({
+      visitorName,
+      mobileNo,
+      address,
+      purpose,
+      dateOfVisit,
+      visitEndTime,
+      email,
+      hostId: host._id,
+      whomToMeet: [host.name],
+      status: "Approved",
+    });
+
+    return sendSuccess(
+      res,
+      "Appointment created for your host account.",
+      visitor,
+      201,
+    );
+  } catch (error) {
+    return sendError(
+      res,
+      400,
+      "Unable to create host appointment.",
+      errorMessage(error),
+    );
+  }
+};
+
+exports.processHostDecision = async (req, res) => {
+  try {
+    const visitor = await Visitors.findOne({
+      _id: req.params.id,
+      hostId: req.user.id,
+    });
+
+    if (!visitor) {
+      return sendError(res, 404, "Appointment not found for this host.");
+    }
+
+    if (visitor.status !== "Pending Approval") {
+      return sendError(
+        res,
+        409,
+        `This appointment is already ${visitor.status}.`,
+      );
+    }
+
+    if (!["approve", "reject"].includes(req.body.decision)) {
+      return sendError(res, 400, "Decision must be approve or reject.");
+    }
+
+    visitor.status = req.body.decision === "approve" ? "Approved" : "Rejected";
+    await visitor.save();
+
+    return sendSuccess(
+      res,
+      `Appointment ${visitor.status.toLowerCase()} successfully.`,
+      visitor,
+    );
+  } catch (error) {
+    return sendError(
+      res,
+      500,
+      "Unable to process appointment decision.",
+      errorMessage(error),
+    );
+  }
+};
+
 exports.createVisitor = async (req, res) => {
   try {
-    const visitor = await Visitors.create(req.body);
+    const { hostId, dateOfVisit, visitEndTime } = req.body;
+    const host = await User.findOne({ _id: hostId, role: "host" });
+
+    if (!host) {
+      return sendError(res, 400, "A valid host must be selected.");
+    }
+
+    if (!validateVisitRange(dateOfVisit, visitEndTime)) {
+      return sendError(
+        res,
+        400,
+        "A valid appointment start and end time are required.",
+      );
+    }
+
+    if (await hasHostConflict(host._id, dateOfVisit, visitEndTime)) {
+      return sendError(
+        res,
+        409,
+        "That time range is already booked for the selected host.",
+      );
+    }
+
+    const visitor = await Visitors.create({
+      ...req.body,
+      hostId: host._id,
+      whomToMeet: [host.name],
+    });
     let notificationMessage = "Host approval notification sent.";
     const backendUrl =
       process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;

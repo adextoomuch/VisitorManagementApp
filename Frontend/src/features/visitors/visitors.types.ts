@@ -11,12 +11,14 @@ export type VisitorStatus = (typeof visitorStatuses)[number];
 export interface Visitor {
   _id: string;
   visitorId: string;
+  hostId?: string;
   visitorName: string;
   mobileNo: number;
   address?: string;
-  whomToMeet: string[];
+  whomToMeet?: string[];
   purpose?: string;
   dateOfVisit?: string;
+  visitEndTime?: string;
   email: string;
   status: VisitorStatus;
   checkInTime?: string;
@@ -29,10 +31,12 @@ export interface CreateVisitorPayload {
   visitorName: string;
   mobileNo: number;
   address?: string;
-  whomToMeet: string[];
+  whomToMeet?: string[];
   purpose?: string;
   dateOfVisit: string;
+  visitEndTime: string;
   email: string;
+  hostId: string;
 }
 
 export interface ApiResponse<T> {

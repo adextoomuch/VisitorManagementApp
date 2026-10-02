@@ -1,28 +1,28 @@
-import { create } from "zustand"
-import { persist } from "zustand/middleware"
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
-export type Theme = "slate" | "teal" | "violet" | "glass"
-export type Mode = "light" | "dark" | "system"
+export type Theme = "slate" | "teal" | "violet" | "glass";
+export type Mode = "light" | "dark" | "system";
 
 interface ThemeState {
-  theme: Theme
-  mode: Mode
+  theme: Theme;
+  mode: Mode;
 
-  setTheme: (theme: Theme) => void
-  setMode: (mode: Mode) => void
+  setTheme: (theme: Theme) => void;
+  setMode: (mode: Mode) => void;
 
-  applyTheme: () => void
+  applyTheme: () => void;
 }
 
 /**
  * Safely detect system theme (client-side only)
  */
 function getSystemMode(): "light" | "dark" {
-  if (typeof window === "undefined") return "light"
+  if (typeof window === "undefined") return "light";
 
   return window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
-    : "light"
+    : "light";
 }
 
 export const useThemeStore = create<ThemeState>()(
@@ -38,16 +38,16 @@ export const useThemeStore = create<ThemeState>()(
        * Set color theme (slate, teal, violet, glass)
        */
       setTheme: (theme) => {
-        set({ theme })
-        get().applyTheme()
+        set({ theme });
+        get().applyTheme();
       },
 
       /**
        * Set light/dark/system mode
        */
       setMode: (mode) => {
-        set({ mode })
-        get().applyTheme()
+        set({ mode });
+        get().applyTheme();
       },
 
       /**
@@ -56,21 +56,22 @@ export const useThemeStore = create<ThemeState>()(
        * - tailwind theme class (color palette)
        */
       applyTheme: () => {
-        const { theme, mode } = get()
+        const { theme, mode } = get();
 
-        const resolvedMode =
-          mode === "system" ? getSystemMode() : mode
+        if (typeof document === "undefined") return;
+
+        const resolvedMode = mode === "system" ? getSystemMode() : mode;
 
         // store resolved mode in state (optional but useful)
-        set({ mode })
+        set({ mode });
 
         /**
          * Apply next-themes compatible class
          * <html class="dark">
          */
-        document.documentElement.classList.remove("dark")
+        document.documentElement.classList.remove("dark");
         if (resolvedMode === "dark") {
-          document.documentElement.classList.add("dark")
+          document.documentElement.classList.add("dark");
         }
 
         /**
@@ -81,10 +82,10 @@ export const useThemeStore = create<ThemeState>()(
           "theme-slate",
           "theme-teal",
           "theme-violet",
-          "theme-glass"
-        )
+          "theme-glass",
+        );
 
-        document.documentElement.classList.add(`theme-${theme}`)
+        document.documentElement.classList.add(`theme-${theme}`);
       },
     }),
     {
@@ -94,8 +95,8 @@ export const useThemeStore = create<ThemeState>()(
        * Re-apply theme after refresh
        */
       onRehydrateStorage: () => (state) => {
-        state?.applyTheme()
+        state?.applyTheme();
       },
-    }
-  )
-)
+    },
+  ),
+);

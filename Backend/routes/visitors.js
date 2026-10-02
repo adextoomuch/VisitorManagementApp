@@ -16,7 +16,13 @@ const {
   scanCheckIn,
   scanCheckOut,
   processApproval,
+  getReceptionistVisitors,
+  manualCheckIn,
+  manualCheckOut,
+  createReceptionistBooking,
 } = require("../controllers/Visitors");
+const protect = require("../middlewares/authMiddleware");
+const authorize = require("../middlewares/roleMiddleware");
 
 // 2. Protect ALL routes in this file with the standard API limiter (prevents aggressive clicking)
 router.use(generalApiLimiter);
@@ -33,8 +39,33 @@ router.get("/reject/:id", processApproval);
 router.route("/checkUser").get(checkVisitor); // To check if a visitor exists
 router.route("/report").get(getVisitorsByDate); // To search visitor by date start and end
 
+router.get(
+  "/reception/visitors",
+  protect,
+  authorize("receptionist"),
+  getReceptionistVisitors,
+);
+router.post(
+  "/reception/bookings",
+  protect,
+  authorize("receptionist"),
+  createReceptionistBooking,
+);
+router.patch(
+  "/reception/visitors/:id/check-in",
+  protect,
+  authorize("receptionist"),
+  manualCheckIn,
+);
+router.patch(
+  "/reception/visitors/:id/check-out",
+  protect,
+  authorize("receptionist"),
+  manualCheckOut,
+);
+
 // 4. Clean paths for scanning (Removed the redundant '/visitors' prefix)
-router.post("/scan-checkin", scanCheckIn); // Route for checkin
-router.post("/scan-checkout", scanCheckOut); // Route for checkout
+router.post("/scan-checkin", protect, authorize("receptionist"), scanCheckIn);
+router.post("/scan-checkout", protect, authorize("receptionist"), scanCheckOut);
 
 module.exports = router;

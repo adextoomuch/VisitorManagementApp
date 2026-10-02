@@ -131,6 +131,17 @@
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
     min-height: 100vh;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+
+  html {
+    background-color: hsl(var(--background));
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
   }
 
   button,
@@ -835,4 +846,65 @@
       white-space: normal;
     }
   }
+}
+
+/* Authenticated workspace palettes. */
+.theme-teal {
+  --primary: 174 72% 30%;
+  --ring: 174 72% 42%;
+  --accent: 168 55% 91%;
+  --accent-foreground: 174 75% 22%;
+}
+
+.theme-violet {
+  --primary: 262 68% 48%;
+  --ring: 262 72% 58%;
+  --accent: 262 70% 94%;
+  --accent-foreground: 262 60% 30%;
+}
+
+.theme-glass {
+  --primary: 191 85% 32%;
+  --ring: 191 85% 48%;
+  --accent: 187 70% 91%;
+  --accent-foreground: 191 80% 22%;
+}
+
+/* Keep the host workspace aligned with the active light/dark surface tokens. */
+.host-dashboard .bg-white {
+  background-color: hsl(var(--card)) !important;
+}
+
+.host-dashboard .bg-slate-100,
+.host-dashboard .bg-slate-950\/35 {
+  background-color: hsl(var(--muted)) !important;
+}
+
+.host-dashboard .text-slate-950,
+.host-dashboard .text-slate-900 {
+  color: hsl(var(--foreground)) !important;
+}
+
+.host-dashboard .text-slate-500,
+.host-dashboard .text-slate-400 {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.host-dashboard .border-slate-200,
+.host-dashboard .border-slate-100 {
+  border-color: hsl(var(--border)) !important;
+}
+
+.host-dashboard .border-amber-200 {
+  border-color: hsl(var(--warning) / 0.35) !important;
+}
+
+.host-dashboard .bg-amber-50\/60 {
+  background-color: hsl(var(--warning) / 0.1) !important;
+}
+
+.host-dashboard .text-amber-900\/70,
+.host-dashboard .text-amber-900\/60,
+.host-dashboard .text-amber-800\/70 {
+  color: hsl(var(--foreground) / 0.72) !important;
 }
