@@ -9,6 +9,7 @@ import { ErrorBoundary } from "@/components/feedback/ErrorBoundary";
  */
 
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
+const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
 // ─────────────────────────────────────────────────────────────
@@ -60,6 +61,10 @@ export default function AppRouter() {
     createElement(Route, {
       path: "/",
       element: createElement(RouteWrapper, null, createElement(LandingPage)),
+    }),
+    createElement(Route, {
+      path: "/reports",
+      element: createElement(RouteWrapper, null, createElement(ReportsPage)),
     }),
     createElement(Route, {
       path: "*",
