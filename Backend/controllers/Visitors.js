@@ -1,6 +1,8 @@
 const Visitors = require ("../models/Visitors");
 const { Resend } = require('resend');
 const QRCode = require('qrcode'); 
+const { checkBlocklist } = require("../services/blocklistService");
+
 
 // Initialize Resend using the environment variable you just added
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -191,161 +193,250 @@ exports.scanCheckIn = async (req, res) => {
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
+
+
 };
 
-
-//Approval / Rejection Logic
-// 7. NEW ENDPOINT: Process the Host's Approval or Rejection decision
-exports.processApproval = async (req, res) => {
+exports.scanCheckOut = async (req, res) => {
     try {
-        const { id } = req.params;
-        // Determine whether they clicked the approve path or reject path based on the URL
-        const isApproval = req.path.includes('approve');
+        const { visitorId } = req.body;
 
-        // Find the visitor document by its primary MongoDB Object _id
-        const visitor = await Visitors.findById(id);
+        const visitor = await Visitor.findOne({ visitorId });
 
         if (!visitor) {
-            return res.status(404).send('<h1>Error: Visitor profile record not found.</h1>');
+            return res.status(404).json({
+                message: "Visitor not found"
+            });
         }
 
-        // Prevent modifying records that have already moved past the registration gateway
-        if (visitor.status !== 'Pending Approval') {
-            return res.status(400).send(`<h1>Notice: This request has already been processed. Current Status: ${visitor.status}</h1>`);
+        if (visitor.status !== "Checked In") {
+            return res.status(400).json({
+                message: "Visitor is not currently checked in"
+            });
         }
 
-        if (isApproval) {
-            // Action Case A: The visit is authorized! 
-            visitor.status = 'Approved';
-            await visitor.save();
+        visitor.status = "Checked Out";
+        visitor.checkOutTime = new Date();
 
-            // 1. GENERATE THE MULTI-DATA QR CODE NOW (Moved from initial creation stage)
-            const qrDataObj = {
-                visitorId: visitor.visitorId || 'N/A',
-                visitorName: visitor.visitorName || 'N/A',
-                mobileNo: visitor.mobileNo || 'N/A',
-                whomToMeet: visitor.whomToMeet || 'N/A',
-                dateOfVisit: visitor.dateOfVisit || 'N/A',
-                email: visitor.email || 'N/A'
-            };
-            const qrDataString = JSON.stringify(qrDataObj);
-            const qrCodeDataUrl = await QRCode.toDataURL(qrDataString);
+        await visitor.save();
 
-            // 2. DISPATCH DIGITAL QR ACCESS PASS TO THE VISITOR
-            try {
-                await resend.emails.send({
-                    from: 'onboarding@resend.dev',
-                    to: 'adextoomuch@gmail.com', // ⚠️ Change to visitor.email in production
-                    subject: 'Your Visitor Access Pass Is Approved!',
-                    html: `
-                        <h1>Congratulations ${visitor.visitorName},</h1>
-                        <p>Your visit request to meet with <strong>${visitor.whomToMeet}</strong> has been approved by the host.</p>
-                        <p><strong>Your Unique Visitor ID:</strong> ${visitor.visitorId}</p>
-                        <p><strong>Mobile No </strong> ${visitor.mobileNo}</p>
-                        <p><strong>Address:</strong> ${visitor.address}</p>
-                        <p><strong>Purpose</strong> ${visitor.purpose}</p>
-                        <p><strong>Date of Visit</strong> ${visitor.dateOfVisit}</p>
-                        <br/>
-                        <h3>Your Digital Entry Ticket QR Code:</h3>
-                        <img src="${qrCodeDataUrl}" alt="Access Pass QR" width="200" height="200" />
-                        <br/>
-                        <p>Please present this Confirmation Slip With QR Code To The Receptionist Or Gate Scanner Upon arrival <strong>${visitor.dateOfVisit}. </strong>
-                        <br/>
-                        <h2>NOTE: No Slip, No Entry </h2> 
-                      `
-                });
-                console.log(`QR Pass safely emailed to visitor: ${visitor.visitorId}`);
-            } catch (visitorEmailError) {
-                console.error("Failed to email QR pass directly to visitor:", visitorEmailError.message);
-            }
-
-            // Return clean HTML confirmation screen to the host's web browser tab
-            return res.status(200).send(`
-                <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
-                    <h1 style="color: #22c55e;">✓ Visit Successfully Approved</h1>
-                    <p>Visitor <strong>${visitor.visitorName}</strong> <h3> Has Been Notified And issued A Data Info With Access Pass QR Code.</h3></p>
-                </div>
-            `);
-
-        } else {
-            // Action Case B: The visit is declined by host
-            visitor.status = 'Rejected';
-            await visitor.save();
-
-            // Optional: You could notify the visitor via email here that their appointment was canceled
-            return res.status(200).send(`
-                <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
-                    <h1 style="color: #ef4444;">✕ Visit Request Declined</h1>
-                    <p>The visitor record for <strong>${visitor.visitorName}</strong> has been updated to Rejected status.</p>
-                </div>
-            `);
-        }
+        return res.status(200).json({
+            message: "Visitor checked out successfully",
+            visitor
+        });
 
     } catch (error) {
-        res.status(500).send(`<h1>Server Error: ${error.message}</h1>`);
+        console.error("Check-out error:", error);
+
+        return res.status(500).json({
+            message: "Server error during check-out"
+        });
     }
 };
 
 
-// 6. NEW ENDPOINT: Handle scanning the QR code for Check-out with strict validations
-exports.scanCheckOut = async (req, res) => {
+
+// Approval / Rejection Logic
+// Process the Host's Approval or Rejection decision
+exports.processApproval = async (req, res) => {
     try {
-        const { qrDataString } = req.body;
+        const { id } = req.params;
 
-        if (!qrDataString) {
-            return res.status(400).json({ success: false, message: "No QR code data provided." });
-        }
+        // Determine whether they clicked the approve path or reject path
+        const isApproval = req.path.includes("approve");
 
-        // 1. Unpack the JSON string back into a JavaScript object
-        let parsedData;
-        try {
-            parsedData = JSON.parse(qrDataString);
-        } catch (parseError) {
-            return res.status(400).json({ success: false, message: "Invalid QR code format." });
-        }
-
-        const { visitorId } = parsedData;
-
-        if (!visitorId) {
-            return res.status(400).json({ success: false, message: "Visitor ID missing from QR data." });
-        }
-
-        // 2. Find the visitor in MongoDB
-        const visitor = await Visitors.findOne({ visitorId });
+        // Find the visitor
+        const visitor = await Visitors.findById(id);
 
         if (!visitor) {
-            return res.status(404).json({ success: false, message: "Visitor profile not found." });
+            return res.status(404).send(
+                "<h1>Error: Visitor profile record not found.</h1>"
+            );
         }
 
-        // 3. EDGE-CASE GUARD 1: Prevent checking out someone who hasn't even arrived yet
-        if (visitor.status === 'Pending') {
-            return res.status(400).json({ 
-                success: false, 
-                message: `Access Denied: ${visitor.visitorName} cannot check out because they are still listed as Pending entry.` 
+        // Prevent processing an already processed request
+        if (visitor.status !== "Pending Approval") {
+            return res.status(400).send(
+                `<h1>Notice: This request has already been processed. Current Status: ${visitor.status}</h1>`
+            );
+        }
+
+        if (isApproval) {
+
+            // ==========================================
+            // PHASE 2: BLACKLIST / WATCHLIST CHECK
+            // ==========================================
+
+            const blockedVisitor = await checkBlocklist({
+                email: visitor.email,
+                mobileNo: visitor.mobileNo,
             });
+
+            // Visitor found on active blocklist
+            if (blockedVisitor) {
+                console.log(
+                    `Blocklist match found for visitor: ${visitor.visitorId}`
+                );
+
+                return res.status(403).send(`
+                    <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+                        <h1 style="color: #ef4444;">✕ Approval Denied</h1>
+
+                        <p>
+                            Visitor <strong>${visitor.visitorName}</strong>
+                            appears on the active security blocklist.
+                        </p>
+
+                        <p>
+                            <strong>Reason:</strong>
+                            ${blockedVisitor.reason}
+                        </p>
+
+                        <p>
+                            The visitor request has not been approved.
+                        </p>
+                    </div>
+                `);
+            }
+
+            // ==========================================
+            // VISITOR PASSED BLOCKLIST CHECK
+            // Continue with normal approval
+            // ==========================================
+
+            visitor.status = "Approved";
+            await visitor.save();
+
+            // Generate QR Code
+            const qrDataObj = {
+                visitorId: visitor.visitorId || "N/A",
+                visitorName: visitor.visitorName || "N/A",
+                mobileNo: visitor.mobileNo || "N/A",
+                whomToMeet: visitor.whomToMeet || "N/A",
+                dateOfVisit: visitor.dateOfVisit || "N/A",
+                email: visitor.email || "N/A",
+            };
+
+            const qrDataString = JSON.stringify(qrDataObj);
+
+            const qrCodeDataUrl = await QRCode.toDataURL(qrDataString);
+
+            // Send visitor access pass
+            try {
+                await resend.emails.send({
+                    from: "onboarding@resend.dev",
+                    to: "adextoomuch@gmail.com",
+                    subject: "Your Visitor Access Pass Is Approved!",
+                    html: `
+                        <h1>Congratulations ${visitor.visitorName},</h1>
+
+                        <p>
+                            Your visit request to meet with
+                            <strong>${visitor.whomToMeet}</strong>
+                            has been approved by the host.
+                        </p>
+
+                        <p>
+                            <strong>Your Unique Visitor ID:</strong>
+                            ${visitor.visitorId}
+                        </p>
+
+                        <p>
+                            <strong>Mobile No:</strong>
+                            ${visitor.mobileNo}
+                        </p>
+
+                        <p>
+                            <strong>Address:</strong>
+                            ${visitor.address}
+                        </p>
+
+                        <p>
+                            <strong>Purpose:</strong>
+                            ${visitor.purpose}
+                        </p>
+
+                        <p>
+                            <strong>Date of Visit:</strong>
+                            ${visitor.dateOfVisit}
+                        </p>
+
+                        <br/>
+
+                        <h3>Your Digital Entry Ticket QR Code:</h3>
+
+                        <img
+                            src="${qrCodeDataUrl}"
+                            alt="Access Pass QR"
+                            width="200"
+                            height="200"
+                        />
+
+                        <br/>
+
+                        <p>
+                            Please present this confirmation slip with QR code
+                            to the receptionist or gate scanner upon arrival.
+                        </p>
+
+                        <h2>NOTE: No Slip, No Entry</h2>
+                    `,
+                });
+
+                console.log(
+                    `QR Pass safely emailed to visitor: ${visitor.visitorId}`
+                );
+
+            } catch (visitorEmailError) {
+                console.error(
+                    "Failed to email QR pass directly to visitor:",
+                    visitorEmailError.message
+                );
+            }
+
+            // Approval confirmation
+            return res.status(200).send(`
+                <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+                    <h1 style="color: #22c55e;">
+                        ✓ Visit Successfully Approved
+                    </h1>
+
+                    <p>
+                        Visitor <strong>${visitor.visitorName}</strong>
+                        has been approved and issued an access pass.
+                    </p>
+                </div>
+            `);
+
+        } else {
+
+            // ==========================================
+            // REJECTION
+            // ==========================================
+
+            visitor.status = "Rejected";
+            await visitor.save();
+
+            return res.status(200).send(`
+                <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+                    <h1 style="color: #ef4444;">
+                        ✕ Visit Request Declined
+                    </h1>
+
+                    <p>
+                        The visitor record for
+                        <strong>${visitor.visitorName}</strong>
+                        has been updated to Rejected status.
+                    </p>
+                </div>
+            `);
         }
-
-        // 4. EDGE-CASE GUARD 2: Prevent double check-outs
-        if (visitor.status === 'Checked Out') {
-            return res.status(400).json({ 
-                success: false, 
-                message: `Notice: ${visitor.visitorName} has already checked out of the building since ${visitor.checkOutTime.toLocaleTimeString()}.` 
-            });
-        }
-
-        // 5. Update the status and stamp the precise departure time
-        visitor.status = 'Checked Out';
-        visitor.checkOutTime = new Date();
-        await visitor.save();
-
-        // 6. Send a friendly departure message back to the scanning terminal
-        res.status(200).json({
-            success: true,
-            message: `Goodbye, ${visitor.visitorName}! Check-out logged successfully at ${visitor.checkOutTime.toLocaleTimeString()}.`,
-            data: visitor
-        });
 
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        console.error("Approval processing error:", error);
+
+        res.status(500).send(
+            `<h1>Server Error: ${error.message}</h1>`
+        );
     }
 };
