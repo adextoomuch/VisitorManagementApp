@@ -41,15 +41,15 @@ startAutoCheckoutJob();
 console.log('⚡ Background task manager initialized (Midnight Auto-Checkout Active).');
 
 // 10. Mount your application API routes
-app.use("/VMS/version1/visitors", visitors);
-app.use("/VMS/version1/dashboard", dashboard); // Mounts your clean dashboard paths!
-app.use("/VMS/version1/auth", auth); // NEW CODE: Mounts your clean authentication paths!
+app.use("/api/v1/visitors", visitors);
+app.use("/api/v1/dashboard", dashboard); // Mounts your clean dashboard paths!
+app.use("/api/v1/auth", auth); // NEW CODE: Mounts your clean authentication paths!
 // 11. Connect to MongoDB and boot up the server via our HTTP wrapper
 const startserver = async() => {
     await connectDB();
     // We update this line to use 'server.listen' instead of 'app.listen'
-    server.listen(PORT, () => {
-        console.log(`App Listening on Port ${PORT} and WebSockets are live!`);
+    app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
+        console.log(`Server running on port ${process.env.PORT || 3000}`);
     });
 };
 
