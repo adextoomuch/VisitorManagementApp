@@ -12,4 +12,4 @@ It replaces traditional paper guestbooks with a secure, automated, and digital s
   It can capture visitor photos, scan IDs, issue digital or printed access badges, and screen guests against watchlists.
 - Emergency Readiness: In the event of an evacuation, administrators can instantly pull up a real-time log of every guest,
   contractor, and employee currently on-site to ensure everyone is accounted for.
-
+- 

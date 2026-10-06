@@ -28,7 +28,7 @@ const startAutoCheckoutJob = () => {
                 
                 // Optional: You can append a note so admins know the system did this, not a scanner
                 visitor.purpose = visitor.purpose 
-                    ? `${visitor.purpose} (Auto-System Checkout at Midnight, Due to Auto-Check-Out Machine)`
+                    ? `${visitor.purpose} (Auto-System Checkout at Midnight)`
                     : '(Auto-System Checkout at Midnight)';
 
                 await visitor.save();

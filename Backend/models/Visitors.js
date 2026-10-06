@@ -81,7 +81,6 @@ visitorSchema.pre("save", async function () {
 
   // Only generate a visitorId if one doesn't exist yet
   if (!doc.visitorId) {
-    // Fixed the deprecation warning by changing 'new: true' to 'returnDocument: "after"'
     const counter = await Counter.findOneAndUpdate(
       { id: "visitorSequence" },
       { $inc: { seq: 1 } },
